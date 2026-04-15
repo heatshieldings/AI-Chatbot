@@ -1,0 +1,167 @@
+import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+
+const WEBSITE_URL = "https://heatshieldings.com";
+
+export interface Message {
+  role: 'user' | 'model';
+  text: string;
+  sources?: string[];
+}
+
+export async function getGreeting(): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return "Hello! I'm your HeatShieldings assistant. How can I help you find the right thermal protection for your project today?";
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  const browserLang = typeof navigator !== 'undefined' ? navigator.language : 'en';
+  
+  if (browserLang.startsWith('en')) {
+    return "Hello! I'm your HeatShieldings assistant. How can I help you find the right thermal protection for your project today?";
+  }
+
+  try {
+    // Add a timeout to the translation request
+    const translationPromise = ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [{ role: 'user', parts: [{ text: `Translate this greeting into ${browserLang}: "Hello! I'm your HeatShieldings assistant. How can I help you find the right thermal protection for your project today?"` }] }],
+      config: {
+        systemInstruction: "You are a helpful translator. Only return the translated text, nothing else.",
+      },
+    });
+
+    const timeoutPromise = new Promise<null>((_, reject) => 
+      setTimeout(() => reject(new Error("Translation timeout")), 3000)
+    );
+
+    const response = await Promise.race([translationPromise, timeoutPromise]) as GenerateContentResponse | null;
+
+    return response?.text || "Hello! I'm your HeatShieldings assistant. How can I help you find the right thermal protection for your project today?";
+  } catch (error) {
+    console.error("Greeting Translation Error:", error);
+    return "Hello! I'm your HeatShieldings assistant. How can I help you find the right thermal protection for your project today?";
+  }
+}
+
+export async function getChatResponse(message: string, history: Message[]): Promise<Message> {
+  // Prioritize a custom user-provided key, fallback to the platform default
+  const apiKey = process.env.CUSTOM_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return {
+      role: 'model',
+      text: "API Key is missing. Please configure it in the settings."
+    };
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  const browserLang = typeof navigator !== 'undefined' ? navigator.language : 'en';
+  
+  const contents = history.map(msg => ({
+    role: msg.role,
+    parts: [{ text: msg.text }]
+  }));
+  
+  const systemInstruction = `You are a helpful product assistant for HeatShieldings.com. 
+        Your goal is to answer questions about products found on the website.
+        ALWAYS use the provided website context from ${WEBSITE_URL} to answer questions.
+        If you don't know the answer, say you don't know but offer to help find something else.
+        Be professional, technical, and helpful.
+        IMPORTANT: Always respond in the same language the user is using. 
+        Detect the language from the user's input message. 
+        If the user's input language is unclear, use the browser's preferred language: ${browserLang}.
+        Translate your technical knowledge accurately into the detected language.
+        
+        CRITICAL: Before giving any advice or product recommendations, you MUST first ask 3 relevant questions to gather more details about the user's specific situation or project. 
+        Ask these questions ONE BY ONE. Ask one question, wait for the user's response, then ask the next one. 
+        Only after the user has answered all 3 questions should you provide your advice or recommendations.
+        
+        STYLE & FORMATTING:
+        1. Be extremely concise. Use short sentences and avoid long paragraphs.
+        2. Use blank lines (double newlines) between all distinct sections (intro, questions, advice, product lists).
+        3. Use bullet points for product features or lists to make them scannable.
+        4. Keep your introduction to a single, brief sentence.
+        5. When providing product recommendations, ALWAYS include the full, visible URL link to the relevant products on HeatShieldings.com (e.g., https://heatshieldings.com/product-name) so the user can see the exact link they are clicking.
+        6. Make your questions specific and targeted to the user's project.
+        7. If the user asks to speak to a human or contact support, provide the email address info@heatshieldings.com and mention that a reply will be sent within 24 hours on business days.`;
+
+  try {
+    let response: GenerateContentResponse | null = null;
+    
+    try {
+      // First attempt: With URL Context Tool
+      const chatPromise = ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [...contents, { role: 'user', parts: [{ text: message }] }],
+        config: {
+          systemInstruction,
+          tools: [{ urlContext: {} }],
+        },
+      });
+
+      const timeoutPromise = new Promise<null>((_, reject) => 
+        setTimeout(() => reject(new Error("Chat response timeout")), 15000)
+      );
+
+      response = await Promise.race([chatPromise, timeoutPromise]) as GenerateContentResponse | null;
+    } catch (initialError: any) {
+      const errorStr = String(initialError).toLowerCase();
+      // If it's a billing/upgrade error, the tool is likely blocked. Retry without the tool.
+      if (errorStr.includes('billing') || errorStr.includes('upgrade') || errorStr.includes('403')) {
+        console.warn("Tool usage blocked due to billing. Retrying in fallback mode...");
+        const fallbackPromise = ai.models.generateContent({
+          model: "gemini-3-flash-preview",
+          contents: [...contents, { role: 'user', parts: [{ text: message }] }],
+          config: {
+            systemInstruction,
+            // NO TOOLS in fallback mode
+          },
+        });
+
+        const timeoutPromise = new Promise<null>((_, reject) => 
+          setTimeout(() => reject(new Error("Chat response timeout")), 15000)
+        );
+
+        response = await Promise.race([fallbackPromise, timeoutPromise]) as GenerateContentResponse | null;
+      } else {
+        throw initialError; // Re-throw if it's a different error
+      }
+    }
+
+    const text = response?.text || "I'm sorry, I couldn't process that request.";
+    
+    // Extract sources if available
+    const sources: string[] = [];
+    const chunks = response?.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    if (chunks) {
+      chunks.forEach((chunk: any) => {
+        if (chunk.web?.uri) sources.push(chunk.web.uri);
+      });
+    }
+
+    return {
+      role: 'model',
+      text,
+      sources: sources.length > 0 ? Array.from(new Set(sources)) : undefined
+    };
+  } catch (error: any) {
+    console.error("Gemini API Error:", error);
+    let errorMessage = "I encountered an error while trying to reach the knowledge base. Please try again later.";
+    
+    const errorStr = String(error).toLowerCase();
+    if (errorStr.includes('429') || errorStr.includes('quota')) {
+      errorMessage = "I've hit my usage limit for today. If you've just upgraded, it may take 5-10 minutes for the changes to take effect. Please try again shortly.";
+    } else if (errorStr.includes('billing') || errorStr.includes('upgrade') || errorStr.includes('403')) {
+      errorMessage = "Access restricted. If you have already upgraded, please ensure your billing account is active and linked to this project in the Google Cloud Console. This can sometimes take a few minutes to propagate.";
+    } else if (errorStr.includes('safety') || errorStr.includes('finish_reason_safety')) {
+      errorMessage = "I'm sorry, I cannot provide a response to that specific query due to safety guidelines. Please try asking in a different way.";
+    } else if (errorStr.includes('timeout')) {
+      errorMessage = "The request timed out. The website might be slow or the connection was interrupted. Please try again.";
+    }
+    
+    return {
+      role: 'model',
+      text: errorMessage
+    };
+  }
+}

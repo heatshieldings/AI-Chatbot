@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: chats
+    // Document ID: sessionId
+    // Fields:
+    //   - startTime: timestamp (required)
+    //   - lastUpdateTime: timestamp (required)
+    //   - messages: list of objects (required)
+    //   - detectedLanguage: string (optional)
+    //   - userAgent: string (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "info@heatshieldings.com" && request.auth.token.email_verified == true);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidChat(data) {
+      return hasRequiredFields(['startTime', 'messages']) &&
+             data.startTime is timestamp &&
+             data.messages is list &&
+             data.messages.size() < 200 &&
+             hasOnlyAllowedFields(['startTime', 'lastUpdateTime', 'messages', 'detectedLanguage', 'userAgent']);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /chats/{sessionId} {
+      // Allow anyone to create/update a chat session (keyed by random UUID)
+      allow create: if isValidChat(request.resource.data);
+      allow update: if isValidChat(request.resource.data);
+      
+      // Allow getting a specific chat by ID (for session initialization)
+      allow get: if true;
+      
+      // Only admin can list/query all chats or delete them
+      allow list: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}

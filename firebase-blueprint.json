@@ -1,0 +1,37 @@
+{
+  "entities": {
+    "ChatSession": {
+      "title": "Chat Session",
+      "description": "A single chat session between a user and the AI assistant.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique session ID" },
+        "userId": { "type": "string", "description": "User ID (if authenticated)" },
+        "startTime": { "type": "string", "format": "date-time", "description": "When the session started" },
+        "lastUpdateTime": { "type": "string", "format": "date-time", "description": "When the last message was sent" },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": { "type": "string", "enum": ["user", "model"], "description": "Who sent the message" },
+              "text": { "type": "string", "description": "The message content" },
+              "timestamp": { "type": "string", "format": "date-time", "description": "When the message was sent" },
+              "language": { "type": "string", "description": "Detected language of the message" }
+            },
+            "required": ["role", "text", "timestamp"]
+          }
+        },
+        "detectedLanguage": { "type": "string", "description": "Primary detected language for the session" },
+        "userAgent": { "type": "string", "description": "User's browser agent" }
+      },
+      "required": ["startTime", "messages"]
+    }
+  },
+  "firestore": {
+    "/chats/{sessionId}": {
+      "schema": "ChatSession",
+      "description": "Collection of all chat sessions."
+    }
+  }
+}
