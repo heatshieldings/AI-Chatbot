@@ -187,16 +187,26 @@ export default function App() {
     }
   };
 
+  const isAdmin = currentUser?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
+    // Force account selection so users can switch to the admin account if needed
+    provider.setCustomParameters({ prompt: 'select_account' });
+    
     try {
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      console.log("Logged in as:", result.user.email);
+      // Automatically show dashboard if the logging in user is the admin
+      if (result.user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        setShowDashboard(true);
+      } else {
+        alert(`Ingelogd als ${result.user.email}, maar dit account heeft geen beheerderstoegang.`);
+      }
     } catch (error) {
       console.error("Login Error:", error);
     }
   };
-
-  const isAdmin = currentUser?.email === ADMIN_EMAIL;
 
   const handleFirestoreError = (error: any, operationType: string, path: string | null) => {
     const errInfo = {
@@ -262,9 +272,16 @@ export default function App() {
             </button>
           )}
           
-          <a href="/" className="block mt-8 text-sm text-slate-400 hover:text-slate-600 transition-colors">
+          <button 
+            onClick={() => {
+              setIsPathAdmin(false);
+              setShowDashboard(false);
+              setIsOpen(true);
+            }} 
+            className="block w-full mt-8 text-sm text-slate-400 hover:text-slate-600 transition-colors"
+          >
             Terug naar Chat
-          </a>
+          </button>
         </div>
       </div>
     );
