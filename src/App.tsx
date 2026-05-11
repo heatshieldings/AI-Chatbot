@@ -100,7 +100,7 @@ export default function App() {
         }
       } catch (error) {
         console.error("Greeting initialization error:", error);
-        setMessages([{ role: 'model', text: "Hello! How can I help you today?" }]);
+        setMessages([{ role: 'model', text: "Hallo! Hoe kan ik je vandaag helpen?" }]);
         setIsGreetingLoading(false);
       }
     };
@@ -237,19 +237,19 @@ export default function App() {
           <div className="w-16 h-16 bg-brand-primary rounded-2xl flex items-center justify-center mx-auto mb-6 text-white shadow-lg">
             <ShieldCheck size={32} />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Admin Access</h1>
-          <p className="text-slate-500 mb-8">Please sign in with your authorized Google account to access the dashboard.</p>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Admin Toegang</h1>
+          <p className="text-slate-500 mb-8">Log in met je geautoriseerde Google-account om het dashboard te openen.</p>
           
           {currentUser ? (
             <div className="space-y-4">
               <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">
-                Access Denied. Your account ({currentUser.email}) is not authorized.
+                Toegang Geweigerd. Je account ({currentUser.email}) is niet geautoriseerd.
               </div>
               <button
                 onClick={() => signOut(auth)}
                 className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-medium hover:bg-slate-200 transition-colors"
               >
-                Sign Out
+                Uitloggen
               </button>
             </div>
           ) : (
@@ -258,12 +258,12 @@ export default function App() {
               className="w-full py-3 bg-brand-primary text-white rounded-xl font-medium hover:bg-orange-600 transition-colors flex items-center justify-center gap-2 shadow-lg"
             >
               <LogIn size={20} />
-              Sign in with Google
+              Inloggen met Google
             </button>
           )}
           
           <a href="/" className="block mt-8 text-sm text-slate-400 hover:text-slate-600 transition-colors">
-            Back to Chat
+            Terug naar Chat
           </a>
         </div>
       </div>
@@ -306,7 +306,7 @@ export default function App() {
                 <div>
                   <h1 className="font-semibold text-lg leading-tight">HeatShieldings AI</h1>
                   <div className="flex items-center gap-2">
-                    <p className="text-xs text-slate-400">Product Expert Assistant</p>
+                    <p className="text-xs text-slate-400">Product Expert Assistent</p>
                     <div className="flex items-center gap-2">
                       <button 
                         onClick={() => {
@@ -318,14 +318,14 @@ export default function App() {
                         }}
                         className="text-[10px] text-white/40 hover:text-white/80 transition-colors underline"
                       >
-                        {isAdmin ? 'Dashboard' : 'Admin'}
+                        {isAdmin ? 'Dashboard' : 'Beheer'}
                       </button>
                       {currentUser && (
                         <button 
                           onClick={() => signOut(auth)}
                           className="text-[10px] text-white/40 hover:text-white/80 transition-colors underline"
                         >
-                          Logout
+                          Uitloggen
                         </button>
                       )}
                     </div>
@@ -429,7 +429,7 @@ export default function App() {
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask about heat shields, wraps, or sleeves..."
+                  placeholder="Stel een vraag over hitteschilden, wraps of sleeves..."
                   className="w-full bg-white border border-slate-200 rounded-xl py-3 pl-4 pr-24 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all shadow-sm"
                 />
                 <div className="absolute right-2 flex items-center gap-1">
@@ -458,7 +458,7 @@ export default function App() {
                 </div>
               </form>
               <p className="text-[10px] text-center text-slate-400 mt-6">
-                Powered by Google AI • Answers based on HeatShieldings.com content
+                Mogelijk gemaakt door Google AI • Antwoorden gebaseerd op HeatShieldings.com inhoud
                 <br />
                 <button 
                   onClick={() => {
@@ -470,7 +470,7 @@ export default function App() {
                   }}
                   className="mt-1 hover:text-slate-600 underline"
                 >
-                  {isAdmin ? 'Back Office Dashboard' : 'Back Office Access'}
+                  {isAdmin ? 'Back Office Dashboard' : 'Back Office Toegang'}
                 </button>
               </p>
             </div>

@@ -9,23 +9,26 @@ export interface Message {
 }
 
 export async function getGreeting(): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  const defaultGreeting = "Hallo! Ik ben je HeatShieldings assistent. Hoe kan ik je vandaag helpen bij het vinden van de juiste thermische bescherming voor jouw project?";
+  
   if (!apiKey) {
-    return "Hello! I'm your HeatShieldings assistant. How can I help you find the right thermal protection for your project today?";
+    return defaultGreeting;
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const browserLang = typeof navigator !== 'undefined' ? navigator.language : 'en';
+  const browserLang = typeof navigator !== 'undefined' ? navigator.language : 'nl';
   
-  if (browserLang.startsWith('en')) {
-    return "Hello! I'm your HeatShieldings assistant. How can I help you find the right thermal protection for your project today?";
+  // If browser is explicitly Dutch or user wants Dutch, stay with default
+  if (browserLang.startsWith('nl')) {
+    return defaultGreeting;
   }
 
+  // If user is clearly in a different locale, we can try to translate the Dutch greeting to their language
   try {
-    // Add a timeout to the translation request
     const translationPromise = ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: [{ role: 'user', parts: [{ text: `Translate this greeting into ${browserLang}: "Hello! I'm your HeatShieldings assistant. How can I help you find the right thermal protection for your project today?"` }] }],
+      contents: [{ role: 'user', parts: [{ text: `Translate this greeting into ${browserLang}: "${defaultGreeting}"` }] }],
       config: {
         systemInstruction: "You are a helpful translator. Only return the translated text, nothing else.",
       },
@@ -37,20 +40,22 @@ export async function getGreeting(): Promise<string> {
 
     const response = await Promise.race([translationPromise, timeoutPromise]) as GenerateContentResponse | null;
 
-    return response?.text || "Hello! I'm your HeatShieldings assistant. How can I help you find the right thermal protection for your project today?";
+    return response?.text || defaultGreeting;
   } catch (error) {
     console.error("Greeting Translation Error:", error);
-    return "Hello! I'm your HeatShieldings assistant. How can I help you find the right thermal protection for your project today?";
+    return defaultGreeting;
   }
 }
 
 export async function getChatResponse(message: string, history: Message[]): Promise<Message> {
   // Prioritize a custom user-provided key, fallback to the platform default
-  const apiKey = process.env.CUSTOM_API_KEY || process.env.GEMINI_API_KEY;
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  
   if (!apiKey) {
+    console.error("GEMINI_API_KEY is missing! Make sure it is set as VITE_GEMINI_API_KEY in Vercel.");
     return {
       role: 'model',
-      text: "API Key is missing. Please configure it in the settings."
+      text: "API Key is missing. Please configure VITE_GEMINI_API_KEY in your Vercel project settings and perform a REDEPLOY."
     };
   }
 
