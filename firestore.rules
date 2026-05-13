@@ -25,7 +25,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() && 
-        (request.auth.token.email.toLower() == "info@heatshieldings.com" && request.auth.token.email_verified == true);
+        (request.auth.token.email.lower() == "info@heatshieldings.com" && request.auth.token.email_verified == true);
     }
 
     function hasRequiredFields(fields) {

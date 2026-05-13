@@ -9,7 +9,7 @@ export interface Message {
 }
 
 export async function getGreeting(): Promise<string> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   const defaultGreeting = "Hallo! Ik ben je HeatShieldings assistent. Hoe kan ik je vandaag helpen bij het vinden van de juiste thermische bescherming voor jouw project?";
   
   if (!apiKey) {
@@ -19,12 +19,10 @@ export async function getGreeting(): Promise<string> {
   const ai = new GoogleGenAI({ apiKey });
   const browserLang = typeof navigator !== 'undefined' ? navigator.language : 'nl';
   
-  // If browser is explicitly Dutch or user wants Dutch, stay with default
   if (browserLang.startsWith('nl')) {
     return defaultGreeting;
   }
 
-  // If user is clearly in a different locale, we can try to translate the Dutch greeting to their language
   try {
     const translationPromise = ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -48,14 +46,13 @@ export async function getGreeting(): Promise<string> {
 }
 
 export async function getChatResponse(message: string, history: Message[]): Promise<Message> {
-  // Prioritize a custom user-provided key, fallback to the platform default
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   
   if (!apiKey) {
-    console.error("GEMINI_API_KEY is missing! Make sure it is set as VITE_GEMINI_API_KEY in Vercel.");
+    console.error("GEMINI_API_KEY is missing!");
     return {
       role: 'model',
-      text: "API Key is missing. Please configure VITE_GEMINI_API_KEY in your Vercel project settings and perform a REDEPLOY."
+      text: "API Key is missing. Please contact administrator."
     };
   }
 
@@ -96,46 +93,55 @@ export async function getChatResponse(message: string, history: Message[]): Prom
     let response: GenerateContentResponse | null = null;
     
     try {
-      // First attempt: With URL Context Tool
-      console.log("Attempting Gemini request with urlContext tool...");
+      // First attempt: Gemini 3 Flash
+      console.log("Attempting Gemini request (gemini-3-flash-preview)...");
       const chatPromise = ai.models.generateContent({
-        model: "gemini-flash-latest",
-        contents: [...contents, { role: 'user', parts: [{ text: `Answer based on ${WEBSITE_URL}: ${message}` }] }],
+        model: "gemini-3-flash-preview",
+        contents: [...contents, { role: 'user', parts: [{ text: message }] }],
         config: {
           systemInstruction,
-          tools: [{ urlContext: {} }],
+          tools: [{ googleSearch: {} }]
         },
       });
 
       const timeoutPromise = new Promise<null>((_, reject) => 
-        setTimeout(() => reject(new Error("Chat response timeout (Initial)")), 25000)
+        setTimeout(() => reject(new Error("Chat response timeout (Primary)")), 20000)
       );
 
       response = await Promise.race([chatPromise, timeoutPromise]) as GenerateContentResponse | null;
-      console.log("Gemini request (with tool) successful");
+      console.log("Gemini request successful");
     } catch (initialError: any) {
-      console.warn("Initial Gemini request failed:", initialError);
-      const errorStr = String(initialError).toLowerCase();
-      // If it's a billing/upgrade error OR a timeout, retry without the tool.
-      if (errorStr.includes('billing') || errorStr.includes('upgrade') || errorStr.includes('403') || errorStr.includes('timeout')) {
-        console.warn("Retrying in fallback mode (no tools)...");
-        const fallbackPromise = ai.models.generateContent({
-          model: "gemini-flash-latest",
+      console.warn("Primary Gemini request failed or timed out:", initialError);
+      
+      // Secondary attempt: Gemini 3.1 Pro
+      console.log("Retrying with gemini-3.1-pro-preview...");
+      try {
+        const secondaryPromise = ai.models.generateContent({
+          model: "gemini-3.1-pro-preview",
           contents: [...contents, { role: 'user', parts: [{ text: message }] }],
           config: {
             systemInstruction,
-            // NO TOOLS in fallback mode
+            tools: [{ googleSearch: {} }]
           },
         });
 
         const timeoutPromise = new Promise<null>((_, reject) => 
-          setTimeout(() => reject(new Error("Chat response timeout (Fallback)")), 25000)
+          setTimeout(() => reject(new Error("Chat response timeout (Secondary)")), 30000)
         );
 
-        response = await Promise.race([fallbackPromise, timeoutPromise]) as GenerateContentResponse | null;
-        console.log("Gemini fallback request successful");
-      } else {
-        throw initialError; 
+        response = await Promise.race([secondaryPromise, timeoutPromise]) as GenerateContentResponse | null;
+        console.log("Gemini secondary request successful");
+      } catch (secondaryError: any) {
+        // Final fallback: no tools
+        console.warn("Secondary failed, final try without tools...");
+        const finalPromise = ai.models.generateContent({
+          model: "gemini-3-flash-preview",
+          contents: [...contents, { role: 'user', parts: [{ text: message }] }],
+          config: {
+            systemInstruction
+          },
+        });
+        response = await finalPromise;
       }
     }
 

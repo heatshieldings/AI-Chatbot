@@ -140,13 +140,13 @@ export default function App() {
 
     console.log("Starting handleSend for session:", sessionId);
 
-    try {
-      const sessionDoc = doc(db, 'chats', sessionId);
-      
-      // Check if this is the first message to create the session
-      if (messages.length === 1 && messages[0].role === 'model') {
-        console.log("Creating new session in Firestore...");
-        try {
+    const logToFirestore = async () => {
+      try {
+        const sessionDoc = doc(db, 'chats', sessionId);
+        
+        // If it's the very first message from the user after the greeting
+        if (messages.length === 1 && messages[0].role === 'model') {
+          console.log("Creating new session in Firestore...");
           await setDoc(sessionDoc, {
             startTime: Timestamp.now(),
             lastUpdateTime: Timestamp.now(),
@@ -166,15 +166,9 @@ export default function App() {
             detectedLanguage: navigator.language || 'en',
             userAgent: navigator.userAgent
           });
-        } catch (error) {
-          console.error("Failed to create session:", error);
-          handleFirestoreError(error, 'create', `chats/${sessionId}`);
-          // Don't throw, try to continue with AI at least
-        }
-      } else {
-        // Log user message to existing Firestore session
-        console.log("Updating existing session in Firestore...");
-        try {
+        } else {
+          // Log user message to existing Firestore session
+          console.log("Updating existing session in Firestore...");
           await updateDoc(sessionDoc, {
             lastUpdateTime: Timestamp.now(),
             messages: arrayUnion({
@@ -184,34 +178,42 @@ export default function App() {
               language: navigator.language || 'en'
             })
           });
-        } catch (error) {
-          console.error("Failed to update session with user msg:", error);
-          handleFirestoreError(error, 'update', `chats/${sessionId}`);
         }
+      } catch (error) {
+        console.error("Firestore logging failed:", error);
+        handleFirestoreError(error, 'write', `chats/${sessionId}`);
       }
+    };
 
-      console.log("Getting AI response...");
+    // Run logging in background
+    logToFirestore();
+
+    console.log("Getting AI response...");
+    try {
       const response = await getChatResponse(currentInput, newMessages);
       console.log("AI response received:", response.text.substring(0, 50) + "...");
       setMessages(prev => [...prev, response]);
 
-      // Log model response to Firestore
-      try {
-        console.log("Logging AI response to Firestore...");
-        await updateDoc(sessionDoc, {
-          lastUpdateTime: Timestamp.now(),
-          messages: arrayUnion({
-            role: 'model',
-            text: response.text,
-            timestamp: Timestamp.now()
-          })
-        });
-      } catch (error) {
-        console.error("Failed to update session with AI resp:", error);
-        handleFirestoreError(error, 'update', `chats/${sessionId}`);
-      }
+      // Log model response to Firestore in background
+      const logModelResponse = async () => {
+        try {
+          const sessionDoc = doc(db, 'chats', sessionId);
+          await updateDoc(sessionDoc, {
+            lastUpdateTime: Timestamp.now(),
+            messages: arrayUnion({
+              role: 'model',
+              text: response.text,
+              timestamp: Timestamp.now()
+            })
+          });
+        } catch (error) {
+          console.error("Failed to log model response:", error);
+        }
+      };
+      
+      logModelResponse();
     } catch (error) {
-      console.error("General handleSend error:", error);
+      console.error("General AI error:", error);
       setMessages(prev => [...prev, { 
         role: 'model', 
         text: "Sorry, er ging iets mis bij het verwerken van je vraag. Probeer het later opnieuw." 
@@ -235,10 +237,17 @@ export default function App() {
         setShowDashboard(true);
         // We stay on the admin path but now isAdmin is true
       } else {
-        alert(`Ingelogd als ${result.user.email}, maar dit account heeft geen beheerderstoegang.`);
+        alert(`Toegang geweigerd: ${result.user.email} is geen geautoriseerde beheerder.`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login Error:", error);
+      if (error.code === 'auth/unauthorized-domain') {
+        alert("Fout: Dit domein is niet geautoriseerd in de Firebase Console. Voeg " + window.location.hostname + " toe aan de lijst met geautoriseerde domeinen in Firebase > Authentication > Settings.");
+      } else if (error.code === 'auth/popup-blocked') {
+        alert("Fout: De login popup werd geblokkeerd. Sta popups toe voor deze site.");
+      } else {
+        alert("Er is een fout opgetreden bij het inloggen: " + (error.message || "Onbekende fout"));
+      }
     }
   };
 
