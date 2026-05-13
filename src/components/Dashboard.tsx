@@ -23,6 +23,7 @@ export default function Dashboard({ onClose }: { onClose: () => void }) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'chats' | 'stats'>('chats');
 
   const stats = useMemo(() => {
@@ -98,8 +99,10 @@ export default function Dashboard({ onClose }: { onClose: () => void }) {
       })) as ChatSession[];
       setSessions(data);
       setIsLoading(false);
-    }, (error) => {
-      console.error("Dashboard Snapshot Error:", error);
+      setError(null);
+    }, (err) => {
+      console.error("Dashboard Snapshot Error:", err);
+      setError(err.message || "Fout bij het laden van de chatsessies. Controleer je rechten.");
       setIsLoading(false);
     });
 
@@ -195,6 +198,18 @@ export default function Dashboard({ onClose }: { onClose: () => void }) {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm flex items-center justify-between">
+              <p><strong>Fout:</strong> {error}</p>
+              <button 
+                onClick={() => { setError(null); setIsLoading(true); }}
+                className="text-xs underline hover:no-underline"
+              >
+                Opnieuw proberen
+              </button>
+            </div>
+          )}
+          
           {isLoading ? (
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary"></div>
