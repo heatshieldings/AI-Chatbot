@@ -20,6 +20,7 @@ export default function App() {
   const [isOpen, setIsOpen] = useState(false);
   const [sessionId] = useState(() => uuidv4());
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [showDashboard, setShowDashboard] = useState(false);
   const [isPathAdmin, setIsPathAdmin] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -66,19 +67,39 @@ export default function App() {
     }
   };
 
+  const isAdmin = currentUser?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase(); // Auth check
+
   useEffect(() => {
-    // Check if we are on the /admin path or have ?view=admin query param
-    const params = new URLSearchParams(window.location.search);
-    if (window.location.pathname === '/admin' || params.get('view') === 'admin') {
-      setIsPathAdmin(true);
-      setShowDashboard(true);
-    }
+    // Check if we should be in admin mode
+    const checkAdminPath = () => {
+      const params = new URLSearchParams(window.location.search);
+      const isExplicitAdmin = window.location.pathname === '/admin' || 
+                              params.get('view') === 'admin' || 
+                              params.has('admin') || 
+                              window.location.hash === '#admin';
+      
+      if (isExplicitAdmin) {
+        setIsPathAdmin(true);
+        setIsOpen(false); 
+      }
+    };
+
+    checkAdminPath();
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log("Auth state change:", user?.email);
       setCurrentUser(user);
+      setIsAuthLoading(false);
     });
     return () => unsubscribe();
   }, []);
+
+  // Auto-show dashboard if on admin path and authenticated
+  useEffect(() => {
+    if (isPathAdmin && isAdmin) {
+      setShowDashboard(true);
+    }
+  }, [isPathAdmin, isAdmin]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -187,8 +208,6 @@ export default function App() {
     }
   };
 
-  const isAdmin = currentUser?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
     // Force account selection so users can switch to the admin account if needed
@@ -200,6 +219,7 @@ export default function App() {
       // Automatically show dashboard if the logging in user is the admin
       if (result.user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
         setShowDashboard(true);
+        // We stay on the admin path but now isAdmin is true
       } else {
         alert(`Ingelogd als ${result.user.email}, maar dit account heeft geen beheerderstoegang.`);
       }
@@ -231,18 +251,21 @@ export default function App() {
 
   // If on /admin path and not logged in as admin, show a full-screen login
   useEffect(() => {
-    if (window.parent) {
-      if (showDashboard) {
-        window.parent.postMessage({ type: 'DASHBOARD_OPENED' }, '*');
-      } else {
-        window.parent.postMessage({ type: isOpen ? 'CHAT_OPENED' : 'CHAT_CLOSED' }, '*');
-      }
-    }
+    // Parent notification removed to avoid potential reload loops in preview
   }, [showDashboard, isOpen]);
+
+  if (isAuthLoading) {
+    return (
+      <div className="fixed inset-0 bg-slate-900 flex flex-col items-center justify-center p-4 z-[300]">
+        <Loader2 size={48} className="animate-spin text-brand-primary mb-4" />
+        <p className="text-white text-sm font-medium animate-pulse">Authenticatie controleren...</p>
+      </div>
+    );
+  }
 
   if (isPathAdmin && !isAdmin) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-slate-900 flex items-center justify-center p-4 z-[200]">
         <div className="bg-white w-full max-w-md p-8 rounded-2xl shadow-2xl text-center">
           <div className="w-16 h-16 bg-brand-primary rounded-2xl flex items-center justify-center mx-auto mb-6 text-white shadow-lg">
             <ShieldCheck size={32} />
@@ -277,6 +300,8 @@ export default function App() {
               setIsPathAdmin(false);
               setShowDashboard(false);
               setIsOpen(true);
+              // Clean up URL if possible (optional)
+              window.history.replaceState({}, document.title, "/");
             }} 
             className="block w-full mt-8 text-sm text-slate-400 hover:text-slate-600 transition-colors"
           >
@@ -288,7 +313,10 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen w-full bg-transparent flex flex-col items-end justify-end p-0 sm:p-4 pointer-events-none">
+    <div className={cn(
+      "h-screen w-full bg-transparent flex flex-col items-end justify-end p-0 sm:p-4",
+      !isOpen && !showDashboard && "pointer-events-none"
+    )}>
       {showDashboard && isAdmin && (
         <Dashboard onClose={() => setShowDashboard(false)} />
       )}
@@ -323,29 +351,7 @@ export default function App() {
                 <div>
                   <h1 className="font-semibold text-lg leading-tight">HeatShieldings AI</h1>
                   <div className="flex items-center gap-2">
-                    <p className="text-xs text-slate-400">Product Expert Assistent</p>
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => {
-                          if (isAdmin) {
-                            setShowDashboard(true);
-                          } else {
-                            handleLogin();
-                          }
-                        }}
-                        className="text-[10px] text-white/40 hover:text-white/80 transition-colors underline"
-                      >
-                        {isAdmin ? 'Dashboard' : 'Beheer'}
-                      </button>
-                      {currentUser && (
-                        <button 
-                          onClick={() => signOut(auth)}
-                          className="text-[10px] text-white/40 hover:text-white/80 transition-colors underline"
-                        >
-                          Uitloggen
-                        </button>
-                      )}
-                    </div>
+                    <p className="text-xs text-slate-400">Product Expert</p>
                   </div>
                 </div>
               </div>
@@ -475,20 +481,7 @@ export default function App() {
                 </div>
               </form>
               <p className="text-[10px] text-center text-slate-400 mt-6">
-                Mogelijk gemaakt door Google AI • Antwoorden gebaseerd op HeatShieldings.com inhoud
-                <br />
-                <button 
-                  onClick={() => {
-                    if (isAdmin) {
-                      setShowDashboard(true);
-                    } else {
-                      handleLogin();
-                    }
-                  }}
-                  className="mt-1 hover:text-slate-600 underline"
-                >
-                  {isAdmin ? 'Back Office Dashboard' : 'Back Office Toegang'}
-                </button>
+                Mogelijk gemaakt door Google AI • Antwoorden gebaseerd op HeatShieldings.com kennis
               </p>
             </div>
           </motion.div>
