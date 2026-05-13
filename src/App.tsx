@@ -429,7 +429,12 @@ export default function App() {
                             : "bg-slate-50 text-slate-800 border border-slate-100 rounded-tl-none"
                         )}>
                           <div className="prose prose-sm max-w-none prose-slate prose-a:text-brand-primary prose-a:no-underline hover:prose-a:underline">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            <ReactMarkdown 
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />
+                              }}
+                            >
                               {msg.text}
                             </ReactMarkdown>
                           </div>

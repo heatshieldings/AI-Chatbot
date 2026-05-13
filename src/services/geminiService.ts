@@ -95,9 +95,17 @@ export async function getChatResponse(message: string, history: Message[]): Prom
         PRODUCT LINK DATABASE (Use these correct links):
         - Hittewerende hoes klittenband glasvezel: https://heatshieldings.com/nl/hittewerende-hoes-klittenband-glasvezel.html
         - Kevlar isolatiekous tot 600C klittenband: https://heatshieldings.com/nl/hitte-reflecterende-kevlar-isolatiekous-tot-600c-klittenband-sluiting.html
-        - Basalt Uitlaathoes (Lava Rock): https://heatshieldings.com/nl/basalt-heat-wrap.html (Note: Use this corrected link instead of the broken one)
+        - Basalt Heat Wrap (Uitlaathoes): https://heatshieldings.com/nl/basalt-heat-wrap.html
+        - Aluminium hitteschild (zelfklevend): https://heatshieldings.com/nl/hitteschild-zelfklevend-aluminium.html
+        - Uitlaat isolatie (Heat Wrap): https://heatshieldings.com/nl/uitlaat-isolatie/
         
-        8. If the user asks to speak to a human or contact support, provide the email address info@heatshieldings.com and mention that a reply will be sent within 24 hours on business days.`;
+        8. CONTACT: If the user asks to speak to a human or contact support, provide info@heatshieldings.com (24h reply on business days).
+        
+        FINAL REMINDER: 
+        - Links must be the full visible URL and open in a new window (handled by UI).
+        - NEVER thank the user for their answers.
+        - NEVER repeat the user's question.
+        - Focus on asking ONE question at a time if the initial 3 haven't been asked yet.`;
 
   try {
     let response: GenerateContentResponse | null = null;

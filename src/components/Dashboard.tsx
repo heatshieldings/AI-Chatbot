@@ -122,18 +122,31 @@ export default function Dashboard({ onClose }: { onClose: () => void }) {
   }, [sessions]);
 
   useEffect(() => {
+    console.log("Dashboard: Starting subscription to chats collection...");
+    console.log("Current User Email:", auth.currentUser?.email);
+    
+    // We try to list without ordering first if ordering fails, but let's keep it for now.
     const q = query(collection(db, 'chats'), orderBy('lastUpdateTime', 'desc'));
+    
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as ChatSession[];
+      console.log(`Dashboard: Received snapshot with ${snapshot.size} chats`);
+      const data = snapshot.docs.map(doc => {
+        const docData = doc.data();
+        return {
+          id: doc.id,
+          ...docData
+        };
+      }) as ChatSession[];
       setSessions(data);
       setIsLoading(false);
       setError(null);
     }, (err) => {
       console.error("Dashboard Snapshot Error:", err);
-      setError(err.message || "Fout bij het laden van de chatsessies. Controleer je rechten.");
+      // Detailed error for debugging
+      const errorMessage = err.code === 'permission-denied' 
+        ? "Toegang geweigerd (Permission Denied). Controleer of je bent ingelogd met de juiste beheerder-email (info@heatshieldings.com)."
+        : err.message;
+      setError(`${err.name}: ${errorMessage}`);
       setIsLoading(false);
     });
 
