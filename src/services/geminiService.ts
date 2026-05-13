@@ -1,4 +1,5 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { logErrorToFirebase } from "./loggingService";
 
 const WEBSITE_URL = "https://heatshieldings.com";
 
@@ -50,10 +51,11 @@ export async function getChatResponse(message: string, history: Message[]): Prom
   const apiKey = (import.meta.env?.VITE_GEMINI_API_KEY) || (typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : undefined);
   
   if (!apiKey) {
-    console.error("GEMINI_API_KEY is missing!");
+    console.warn("GEMINI_API_KEY is missing! VITE_GEMINI_API_KEY must be set in Vercel.");
+    logErrorToFirebase("HS-AI-001", "Missing API Key", "VITE_GEMINI_API_KEY is not defined in environment.");
     return {
       role: 'model',
-      text: "De AI assistent is tijdelijk niet beschikbaar. Configureer de API Sleutel in Vercel als VITE_GEMINI_API_KEY."
+      text: "De AI assistent is tijdelijk niet beschikbaar. Onze technici zijn op de hoogte gebracht. (Foutcode: HS-AI-001)"
     };
   }
 
@@ -164,22 +166,35 @@ export async function getChatResponse(message: string, history: Message[]): Prom
     };
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    let errorMessage = "I encountered an error while trying to reach the knowledge base. Please try again later.";
     
     const errorStr = String(error).toLowerCase();
+    let errorCode = "HS-AI-999";
+    let logMessage = "Unknown Gemini Error";
+    let userMsg = "De AI assistent is tijdelijk niet beschikbaar. Probeer het later opnieuw. (Foutcode: HS-AI-002)";
+    
     if (errorStr.includes('429') || errorStr.includes('quota')) {
-      errorMessage = "I've hit my usage limit for today. If you've just upgraded, it may take 5-10 minutes for the changes to take effect. Please try again shortly.";
+      errorCode = "HS-AI-101";
+      logMessage = "Quota Exceeded";
+      userMsg = "De assistent is momenteel erg druk. Probeer het over een paar minuten weer. (Foutcode: HS-AI-101)";
     } else if (errorStr.includes('billing') || errorStr.includes('upgrade') || errorStr.includes('403')) {
-      errorMessage = "Access restricted. If you have already upgraded, please ensure your billing account is active and linked to this project in the Google Cloud Console. This can sometimes take a few minutes to propagate.";
-    } else if (errorStr.includes('safety') || errorStr.includes('finish_reason_safety')) {
-      errorMessage = "I'm sorry, I cannot provide a response to that specific query due to safety guidelines. Please try asking in a different way.";
+      errorCode = "HS-AI-102";
+      logMessage = "Billing/Auth Issue";
+      userMsg = "De AI assistent is momenteel niet beschikbaar wegens onderhoud. (Foutcode: HS-AI-102)";
+    } else if (errorStr.includes('safety')) {
+      errorCode = "HS-AI-103";
+      logMessage = "Safety Trigger";
+      userMsg = "Ik kan helaas geen antwoord geven op deze specifieke vraag. (Foutcode: HS-AI-103)";
     } else if (errorStr.includes('timeout')) {
-      errorMessage = "The request timed out. The website might be slow or the connection was interrupted. Please try again.";
+      errorCode = "HS-AI-104";
+      logMessage = "Timeout";
+      userMsg = "Het duurt te lang om een antwoord te genereren. Probeer het nog eens. (Foutcode: HS-AI-104)";
     }
+
+    logErrorToFirebase(errorCode, logMessage, error);
     
     return {
       role: 'model',
-      text: errorMessage
+      text: userMsg
     };
   }
 }

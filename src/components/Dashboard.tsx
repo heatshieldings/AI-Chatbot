@@ -3,7 +3,7 @@ import { db, auth } from '../firebase';
 import { collection, query, orderBy, onSnapshot, Timestamp, doc, deleteDoc } from 'firebase/firestore';
 import { format, differenceInMinutes } from 'date-fns';
 import { Message } from '../services/geminiService';
-import { ChevronRight, ChevronDown, MessageSquare, Clock, Globe, User, Bot, Download, X, BarChart3, TrendingUp, Hash, Users, PieChart, Trash2 } from 'lucide-react';
+import { AlertCircle, ChevronRight, ChevronDown, MessageSquare, Clock, Globe, User, Bot, Download, X, BarChart3, TrendingUp, Hash, Users, PieChart, Trash2 } from 'lucide-react';
 
 interface ChatSession {
   id: string;
@@ -19,12 +19,25 @@ interface ChatSession {
   userAgent?: string;
 }
 
+interface ErrorReport {
+  id: string;
+  code: string;
+  message: string;
+  details: string;
+  timestamp: Timestamp;
+  userId?: string;
+  userEmail?: string;
+  path?: string;
+}
+
 export default function Dashboard({ onClose }: { onClose: () => void }) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [errorReports, setErrorReports] = useState<ErrorReport[]>([]);
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
+  const [expandedError, setExpandedError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'chats' | 'stats'>('chats');
+  const [activeTab, setActiveTab] = useState<'chats' | 'stats' | 'errors'>('chats');
 
   const stats = useMemo(() => {
     if (sessions.length === 0) return null;
@@ -109,6 +122,21 @@ export default function Dashboard({ onClose }: { onClose: () => void }) {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const q = query(collection(db, 'error_reports'), orderBy('timestamp', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as ErrorReport[];
+      setErrorReports(data);
+    }, (err) => {
+      console.error("Errors Snapshot Error:", err);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const exportToCSV = () => {
     const headers = ['Session ID', 'Start Time', 'Last Update', 'Language', 'Role', 'Message', 'Timestamp'];
     const rows = sessions.flatMap(session => 
@@ -178,6 +206,12 @@ export default function Dashboard({ onClose }: { onClose: () => void }) {
                 className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'stats' ? 'bg-white text-slate-900 shadow-sm' : 'text-white hover:bg-white/10'}`}
               >
                 Statistieken
+              </button>
+              <button
+                onClick={() => setActiveTab('errors')}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'errors' ? 'bg-white text-slate-900 shadow-sm' : 'text-white hover:bg-white/10'}`}
+              >
+                Fouten {errorReports.length > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{errorReports.length}</span>}
               </button>
             </div>
             <button
@@ -333,6 +367,78 @@ export default function Dashboard({ onClose }: { onClose: () => void }) {
                   )}
                 </div>
               </div>
+            </div>
+          ) : activeTab === 'errors' ? (
+            <div className="space-y-4">
+              {errorReports.length === 0 ? (
+                <div className="text-center py-20 text-slate-500">
+                  <AlertCircle size={48} className="mx-auto mb-4 opacity-20" />
+                  <p>Geen fouten gerapporteerd.</p>
+                </div>
+              ) : (
+                errorReports.map((report) => (
+                  <div 
+                    key={report.id}
+                    className="bg-white border border-red-100 rounded-xl overflow-hidden shadow-sm transition-all hover:shadow-md"
+                  >
+                    <button
+                      onClick={() => setExpandedError(expandedError === report.id ? null : report.id)}
+                      className="w-full p-4 flex items-center justify-between text-left hover:bg-red-50/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-2 text-red-600 font-bold">
+                          <code className="bg-red-50 px-2 py-1 rounded text-xs">{report.code}</code>
+                        </div>
+                        <div className="flex items-center gap-2 text-slate-600">
+                          <Clock size={16} />
+                          <span className="text-sm">
+                            {format(report.timestamp.toDate(), 'MMM d, HH:mm:ss')}
+                          </span>
+                        </div>
+                        <div className="flex-1 text-sm font-medium text-slate-800 line-clamp-1">
+                          {report.message}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {expandedError === report.id ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                      </div>
+                    </button>
+
+                    {expandedError === report.id && (
+                      <div className="p-4 border-t border-slate-100 bg-slate-50 space-y-4">
+                        <div className="grid grid-cols-2 gap-4 text-xs">
+                          <div>
+                            <span className="text-slate-400 block mb-1">Gebruiker</span>
+                            <span className="text-slate-700">{report.userEmail || 'Anoniem'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block mb-1">Pagina</span>
+                            <span className="text-slate-700">{report.path || '/'}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-xs mb-2">Technische Details</span>
+                          <pre className="p-4 bg-slate-900 text-slate-300 rounded-xl text-xs overflow-x-auto whitespace-pre-wrap font-mono">
+                            {report.details}
+                          </pre>
+                        </div>
+                        <div className="flex justify-end">
+                          <button 
+                            onClick={async () => {
+                              if (window.confirm('Verwijder dit foutrapport?')) {
+                                await deleteDoc(doc(db, 'error_reports', report.id));
+                              }
+                            }}
+                            className="text-xs text-red-500 hover:underline flex items-center gap-1"
+                          >
+                            <Trash2 size={14} /> Verwijder rapport
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           ) : (
             <div className="space-y-4">
