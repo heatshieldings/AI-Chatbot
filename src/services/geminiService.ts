@@ -9,10 +9,11 @@ export interface Message {
 }
 
 export async function getGreeting(): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = (import.meta.env?.VITE_GEMINI_API_KEY) || (typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : undefined);
   const defaultGreeting = "Hallo! Ik ben je HeatShieldings assistent. Hoe kan ik je vandaag helpen bij het vinden van de juiste thermische bescherming voor jouw project?";
   
   if (!apiKey) {
+    console.warn("GEMINI_API_KEY is missing! VITE_GEMINI_API_KEY must be set in Vercel.");
     return defaultGreeting;
   }
 
@@ -46,13 +47,13 @@ export async function getGreeting(): Promise<string> {
 }
 
 export async function getChatResponse(message: string, history: Message[]): Promise<Message> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = (import.meta.env?.VITE_GEMINI_API_KEY) || (typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : undefined);
   
   if (!apiKey) {
     console.error("GEMINI_API_KEY is missing!");
     return {
       role: 'model',
-      text: "API Key is missing. Please contact administrator."
+      text: "De AI assistent is tijdelijk niet beschikbaar. Configureer de API Sleutel in Vercel als VITE_GEMINI_API_KEY."
     };
   }
 

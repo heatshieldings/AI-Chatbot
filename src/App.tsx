@@ -67,6 +67,13 @@ export default function App() {
     }
   };
 
+  // Handle resizing when open/closed in iframe
+  useEffect(() => {
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: 'CHAT_STATE', isOpen }, '*');
+    }
+  }, [isOpen]);
+
   const isAdmin = currentUser?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase(); // Auth check
 
   useEffect(() => {
@@ -345,7 +352,8 @@ export default function App() {
 
   return (
     <div className={cn(
-      "h-screen w-full bg-transparent flex flex-col items-end justify-end p-0 sm:p-4",
+      "h-screen w-full bg-transparent flex flex-col items-end justify-end",
+      isOpen || showDashboard ? "p-0 sm:p-4" : "p-0",
       !isOpen && !showDashboard && "pointer-events-none"
     )}>
       {showDashboard && isAdmin && (
