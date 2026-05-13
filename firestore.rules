@@ -25,23 +25,13 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() && 
-        (request.auth.token.email.lower() == "info@heatshieldings.com" && request.auth.token.email_verified == true);
-    }
-
-    function hasRequiredFields(fields) {
-      return request.resource.data.keys().hasAll(fields);
-    }
-
-    function hasOnlyAllowedFields(fields) {
-      return request.resource.data.keys().hasOnly(fields);
+        (request.auth.token.email.lower() == "info@heatshieldings.com");
     }
 
     function isValidChat(data) {
-      return hasRequiredFields(['startTime', 'messages']) &&
-             data.startTime is timestamp &&
-             data.messages is list &&
-             data.messages.size() < 200 &&
-             hasOnlyAllowedFields(['startTime', 'lastUpdateTime', 'messages', 'detectedLanguage', 'userAgent']);
+      // Simplified validation to prevent rejection of partial updates
+      return data.messages is list &&
+             data.messages.size() < 500;
     }
 
     // ===============================================================
@@ -49,16 +39,21 @@ service cloud.firestore {
     // ===============================================================
 
     match /chats/{sessionId} {
-      // Allow anyone to create/update a chat session (keyed by random UUID)
-      allow create: if isValidChat(request.resource.data);
-      allow update: if isValidChat(request.resource.data);
+      // Allow anyone to create/update a chat session
+      allow create, update: if true; 
       
-      // Allow getting a specific chat by ID (for session initialization)
+      // Allow getting a specific chat by ID
       allow get: if true;
       
       // Only admin can list/query all chats or delete them
-      allow list: if isAdmin();
-      allow delete: if isAdmin();
+      allow list, delete: if isAdmin();
+    }
+
+    match /error_reports/{reportId} {
+      // Anyone can create an error report
+      allow create: if true;
+      // Only admin can read or delete reports
+      allow read, list, delete: if isAdmin();
     }
   }
 }

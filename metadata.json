@@ -1,5 +1,5 @@
 {
   "name": "HeatShieldings AI Assistant",
   "description": "An AI-powered product assistant for HeatShieldings.com that answers questions using website content as context.",
-  "requestFramePermissions": ["microphone"]
+  "requestFramePermissions": ["microphone", "identity-credentials-get"]
 }

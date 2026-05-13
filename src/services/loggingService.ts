@@ -25,6 +25,14 @@ export async function logErrorToFirebase(code: string, message: string, original
 
     await addDoc(collection(db, 'error_reports'), errorData);
     console.log(`[Logged to Firestore] Error ${code}: ${message}`);
+
+    // New: Trigger email report via backend API
+    fetch('/api/report-error', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(errorData)
+    }).catch(err => console.error("Failed to trigger email report:", err));
+
   } catch (err) {
     console.error("Failed to log error to Firebase:", err);
   }

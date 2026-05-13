@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Bot, User, Loader2, ExternalLink, ShieldCheck, X, LayoutDashboard, LogIn, LogOut, Mic, MicOff } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { getChatResponse, getGreeting, Message } from './services/geminiService';
 import { cn } from './lib/utils';
 import { db, auth } from './firebase';
@@ -9,6 +10,7 @@ import { doc, setDoc, updateDoc, arrayUnion, Timestamp, getDoc } from 'firebase/
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 import { v4 as uuidv4 } from 'uuid';
 import Dashboard from './components/Dashboard';
+import { logErrorToFirebase } from './services/loggingService';
 
 const ADMIN_EMAIL = "info@heatshieldings.com";
 
@@ -150,45 +152,33 @@ export default function App() {
     const logToFirestore = async () => {
       try {
         const sessionDoc = doc(db, 'chats', sessionId);
-        
-        // If it's the very first message from the user after the greeting
-        if (messages.length === 1 && messages[0].role === 'model') {
-          console.log("Creating new session in Firestore...");
-          await setDoc(sessionDoc, {
-            startTime: Timestamp.now(),
-            lastUpdateTime: Timestamp.now(),
-            messages: [
-              {
-                role: 'model',
-                text: messages[0].text,
-                timestamp: Timestamp.now()
-              },
-              {
-                role: 'user',
-                text: currentInput,
-                timestamp: Timestamp.now(),
-                language: navigator.language || 'en'
-              }
-            ],
-            detectedLanguage: navigator.language || 'en',
-            userAgent: navigator.userAgent
-          });
-        } else {
-          // Log user message to existing Firestore session
-          console.log("Updating existing session in Firestore...");
-          await updateDoc(sessionDoc, {
-            lastUpdateTime: Timestamp.now(),
-            messages: arrayUnion({
-              role: 'user',
-              text: currentInput,
-              timestamp: Timestamp.now(),
-              language: navigator.language || 'en'
-            })
-          });
+        const now = Timestamp.now();
+        const sessionExists = messages.length > 1;
+
+        const sessionData: any = {
+          lastUpdateTime: now,
+          detectedLanguage: navigator.language || 'en',
+          userAgent: navigator.userAgent,
+          messages: arrayUnion(...(!sessionExists && messages[0]?.role === 'model' 
+            ? [
+                { role: 'model', text: messages[0].text, timestamp: now },
+                { role: 'user', text: currentInput, timestamp: now, language: navigator.language || 'en' }
+              ]
+            : [
+                { role: 'user', text: currentInput, timestamp: now, language: navigator.language || 'en' }
+              ]
+          ))
+        };
+
+        if (!sessionExists) {
+          sessionData.startTime = now;
         }
+
+        await setDoc(sessionDoc, sessionData, { merge: true });
+        console.log("Chat saved successfully.");
       } catch (error) {
         console.error("Firestore logging failed:", error);
-        handleFirestoreError(error, 'write', `chats/${sessionId}`);
+        logErrorToFirebase("HS-DB-001", "Chat Session Save Failed", error);
       }
     };
 
@@ -205,16 +195,17 @@ export default function App() {
       const logModelResponse = async () => {
         try {
           const sessionDoc = doc(db, 'chats', sessionId);
-          await updateDoc(sessionDoc, {
+          await setDoc(sessionDoc, {
             lastUpdateTime: Timestamp.now(),
             messages: arrayUnion({
               role: 'model',
               text: response.text,
               timestamp: Timestamp.now()
             })
-          });
+          }, { merge: true });
         } catch (error) {
           console.error("Failed to log model response:", error);
+          logErrorToFirebase("HS-DB-002", "AI Response Log Failed", error);
         }
       };
       
@@ -284,6 +275,7 @@ export default function App() {
       path
     };
     console.error('Firestore Error: ', JSON.stringify(errInfo));
+    logErrorToFirebase("HS-DB-999", `Firestore ${operationType} failed`, error);
     return errInfo;
   };
 
@@ -379,24 +371,24 @@ export default function App() {
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="w-full max-w-lg h-full max-h-[700px] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 pointer-events-auto"
+            className="w-full max-w-lg h-full max-h-[700px] bg-white/90 backdrop-blur-xl rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] flex flex-col overflow-hidden border border-white/20 pointer-events-auto"
           >
             {/* Header */}
-            <div className="bg-brand-secondary p-4 flex items-center justify-between text-white">
+            <div className="bg-brand-secondary/95 backdrop-blur-md p-4 flex items-center justify-between text-white shadow-sm ring-1 ring-white/10">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-brand-primary rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 bg-brand-primary rounded-lg flex items-center justify-center shadow-lg shadow-brand-primary/20">
                   <ShieldCheck size={24} />
                 </div>
                 <div>
-                  <h1 className="font-semibold text-lg leading-tight">HeatShieldings AI</h1>
+                  <h1 className="font-semibold text-lg leading-tight tracking-tight">HeatShieldings AI</h1>
                   <div className="flex items-center gap-2">
-                    <p className="text-xs text-slate-400">Product Expert</p>
+                    <p className="text-xs text-slate-400 font-medium">Product Expert</p>
                   </div>
                 </div>
               </div>
               <button 
                 onClick={() => setIsOpen(false)}
-                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                className="p-2 hover:bg-white/10 rounded-full transition-all hover:rotate-90 duration-200"
               >
                 <X size={20} />
               </button>
@@ -405,7 +397,7 @@ export default function App() {
             {/* Messages Area */}
             <div 
               ref={scrollRef}
-              className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth"
+              className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth bg-transparent"
             >
               {isGreetingLoading ? (
                 <div className="flex items-center justify-center h-full">
@@ -436,8 +428,8 @@ export default function App() {
                             ? "bg-brand-primary text-white rounded-tr-none" 
                             : "bg-slate-50 text-slate-800 border border-slate-100 rounded-tl-none"
                         )}>
-                          <div className="prose prose-sm max-w-none prose-slate">
-                            <ReactMarkdown>
+                          <div className="prose prose-sm max-w-none prose-slate prose-a:text-brand-primary prose-a:no-underline hover:prose-a:underline">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
                               {msg.text}
                             </ReactMarkdown>
                           </div>
@@ -482,7 +474,7 @@ export default function App() {
             </div>
 
             {/* Input Area */}
-            <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+            <div className="p-4 border-t border-white/10 bg-white/40 backdrop-blur-md">
               <form 
                 onSubmit={(e) => { e.preventDefault(); handleSend(); }}
                 className="relative flex items-center"
@@ -491,8 +483,8 @@ export default function App() {
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Stel een vraag over hitteschilden, wraps of sleeves..."
-                  className="w-full bg-white border border-slate-200 rounded-xl py-3 pl-4 pr-24 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all shadow-sm"
+                  placeholder="Stel een vraag over hitteschilden..."
+                  className="w-full bg-white/80 border border-slate-200/50 rounded-xl py-3 pl-4 pr-24 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition-all shadow-sm"
                 />
                 <div className="absolute right-2 flex items-center gap-1">
                   {isSupported && (
