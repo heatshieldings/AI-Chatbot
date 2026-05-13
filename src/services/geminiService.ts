@@ -62,6 +62,8 @@ export async function getChatResponse(message: string, history: Message[]): Prom
   const ai = new GoogleGenAI({ apiKey });
   const browserLang = typeof navigator !== 'undefined' ? navigator.language : 'en';
   
+  console.log("Requesting chat response for:", message);
+
   const contents = history.map(msg => ({
     role: msg.role,
     parts: [{ text: msg.text }]
@@ -95,9 +97,10 @@ export async function getChatResponse(message: string, history: Message[]): Prom
     
     try {
       // First attempt: With URL Context Tool
+      console.log("Attempting Gemini request with urlContext tool...");
       const chatPromise = ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [...contents, { role: 'user', parts: [{ text: message }] }],
+        model: "gemini-flash-latest",
+        contents: [...contents, { role: 'user', parts: [{ text: `Answer based on ${WEBSITE_URL}: ${message}` }] }],
         config: {
           systemInstruction,
           tools: [{ urlContext: {} }],
@@ -105,17 +108,19 @@ export async function getChatResponse(message: string, history: Message[]): Prom
       });
 
       const timeoutPromise = new Promise<null>((_, reject) => 
-        setTimeout(() => reject(new Error("Chat response timeout")), 15000)
+        setTimeout(() => reject(new Error("Chat response timeout (Initial)")), 25000)
       );
 
       response = await Promise.race([chatPromise, timeoutPromise]) as GenerateContentResponse | null;
+      console.log("Gemini request (with tool) successful");
     } catch (initialError: any) {
+      console.warn("Initial Gemini request failed:", initialError);
       const errorStr = String(initialError).toLowerCase();
-      // If it's a billing/upgrade error, the tool is likely blocked. Retry without the tool.
-      if (errorStr.includes('billing') || errorStr.includes('upgrade') || errorStr.includes('403')) {
-        console.warn("Tool usage blocked due to billing. Retrying in fallback mode...");
+      // If it's a billing/upgrade error OR a timeout, retry without the tool.
+      if (errorStr.includes('billing') || errorStr.includes('upgrade') || errorStr.includes('403') || errorStr.includes('timeout')) {
+        console.warn("Retrying in fallback mode (no tools)...");
         const fallbackPromise = ai.models.generateContent({
-          model: "gemini-3-flash-preview",
+          model: "gemini-flash-latest",
           contents: [...contents, { role: 'user', parts: [{ text: message }] }],
           config: {
             systemInstruction,
@@ -124,12 +129,13 @@ export async function getChatResponse(message: string, history: Message[]): Prom
         });
 
         const timeoutPromise = new Promise<null>((_, reject) => 
-          setTimeout(() => reject(new Error("Chat response timeout")), 15000)
+          setTimeout(() => reject(new Error("Chat response timeout (Fallback)")), 25000)
         );
 
         response = await Promise.race([fallbackPromise, timeoutPromise]) as GenerateContentResponse | null;
+        console.log("Gemini fallback request successful");
       } else {
-        throw initialError; // Re-throw if it's a different error
+        throw initialError; 
       }
     }
 

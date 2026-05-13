@@ -131,17 +131,21 @@ export default function App() {
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
-    const userMessage: Message = { role: 'user', text: input };
+    const currentInput = input; // Capture current input
+    const userMessage: Message = { role: 'user', text: currentInput };
     const newMessages = [...messages, userMessage];
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
+
+    console.log("Starting handleSend for session:", sessionId);
 
     try {
       const sessionDoc = doc(db, 'chats', sessionId);
       
       // Check if this is the first message to create the session
       if (messages.length === 1 && messages[0].role === 'model') {
+        console.log("Creating new session in Firestore...");
         try {
           await setDoc(sessionDoc, {
             startTime: Timestamp.now(),
@@ -154,7 +158,7 @@ export default function App() {
               },
               {
                 role: 'user',
-                text: input,
+                text: currentInput,
                 timestamp: Timestamp.now(),
                 language: navigator.language || 'en'
               }
@@ -163,32 +167,37 @@ export default function App() {
             userAgent: navigator.userAgent
           });
         } catch (error) {
+          console.error("Failed to create session:", error);
           handleFirestoreError(error, 'create', `chats/${sessionId}`);
-          throw error;
+          // Don't throw, try to continue with AI at least
         }
       } else {
         // Log user message to existing Firestore session
+        console.log("Updating existing session in Firestore...");
         try {
           await updateDoc(sessionDoc, {
             lastUpdateTime: Timestamp.now(),
             messages: arrayUnion({
               role: 'user',
-              text: input,
+              text: currentInput,
               timestamp: Timestamp.now(),
               language: navigator.language || 'en'
             })
           });
         } catch (error) {
+          console.error("Failed to update session with user msg:", error);
           handleFirestoreError(error, 'update', `chats/${sessionId}`);
-          throw error;
         }
       }
 
-      const response = await getChatResponse(input, newMessages);
+      console.log("Getting AI response...");
+      const response = await getChatResponse(currentInput, newMessages);
+      console.log("AI response received:", response.text.substring(0, 50) + "...");
       setMessages(prev => [...prev, response]);
 
       // Log model response to Firestore
       try {
+        console.log("Logging AI response to Firestore...");
         await updateDoc(sessionDoc, {
           lastUpdateTime: Timestamp.now(),
           messages: arrayUnion({
@@ -198,12 +207,17 @@ export default function App() {
           })
         });
       } catch (error) {
+        console.error("Failed to update session with AI resp:", error);
         handleFirestoreError(error, 'update', `chats/${sessionId}`);
-        throw error;
       }
     } catch (error) {
-      console.error("Chat logging error:", error);
+      console.error("General handleSend error:", error);
+      setMessages(prev => [...prev, { 
+        role: 'model', 
+        text: "Sorry, er ging iets mis bij het verwerken van je vraag. Probeer het later opnieuw." 
+      }]);
     } finally {
+      console.log("handleSend finished, clearing loading state.");
       setIsLoading(false);
     }
   };

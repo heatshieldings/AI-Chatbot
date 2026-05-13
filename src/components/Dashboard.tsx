@@ -159,7 +159,7 @@ export default function Dashboard({ onClose }: { onClose: () => void }) {
             </div>
             <div>
               <h1 className="font-bold text-xl">Chat Analyse Dashboard</h1>
-              <p className="text-sm text-slate-400">Beheer en analyseer klantinteracties</p>
+              <p className="text-sm text-slate-400">Analyseer klantinteracties</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
