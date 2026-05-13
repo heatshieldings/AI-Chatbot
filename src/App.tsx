@@ -241,8 +241,9 @@ export default function App() {
       }
     } catch (error: any) {
       console.error("Login Error:", error);
+      const currentDomain = window.location.hostname;
       if (error.code === 'auth/unauthorized-domain') {
-        alert("Fout: Dit domein is niet geautoriseerd in de Firebase Console. Voeg " + window.location.hostname + " toe aan de lijst met geautoriseerde domeinen in Firebase > Authentication > Settings.");
+        alert(`Fout: Dit domein (${currentDomain}) is niet geautoriseerd in de Firebase Console.\n\nControleer of EXACT "${currentDomain}" is toegevoegd aan:\nFirebase Console > Authentication > Settings > Authorized Domains.\n\nHet kan ook zijn dat de API Sleutel in je Vercel instellingen bij een ander project hoort.`);
       } else if (error.code === 'auth/popup-blocked') {
         alert("Fout: De login popup werd geblokkeerd. Sta popups toe voor deze site.");
       } else {
