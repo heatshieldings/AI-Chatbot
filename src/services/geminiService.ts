@@ -97,7 +97,7 @@ export async function getChatResponse(message: string, history: Message[]): Prom
         - Kevlar isolatiekous tot 600C klittenband: https://heatshieldings.com/nl/hitte-reflecterende-kevlar-isolatiekous-tot-600c-klittenband-sluiting.html
         - Hitteschild zelfklevend aluminium: https://heatshieldings.com/nl/hitteschild-zelfklevend-aluminium.html
         
-        CRITICAL: Never invent or guess product URLs. If a product is mentioned but not in the confirmed list, suggest the user searches on HeatShieldings.com or ask them for more details to provide a confirmed link later.
+        CRITICAL: Never invent or guess product URLs. ONLY use information and links from HeatShieldings.com. NEVER mention or link to other websites.
         
         8. CONTACT: If the user asks for a human, provide info@heatshieldings.com.`;
 
@@ -159,12 +159,14 @@ export async function getChatResponse(message: string, history: Message[]): Prom
 
     const text = response?.text || "I'm sorry, I couldn't process that request.";
     
-    // Extract sources if available
+    // Extract and filter sources (ONLY heatshieldings.com)
     const sources: string[] = [];
     const chunks = response?.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {
       chunks.forEach((chunk: any) => {
-        if (chunk.web?.uri) sources.push(chunk.web.uri);
+        if (chunk.web?.uri && chunk.web.uri.toLowerCase().includes("heatshieldings.com")) {
+          sources.push(chunk.web.uri);
+        }
       });
     }
 
