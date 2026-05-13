@@ -9,7 +9,7 @@ export interface Message {
 }
 
 export async function getGreeting(): Promise<string> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : undefined);
+  const apiKey = process.env.GEMINI_API_KEY;
   const defaultGreeting = "Hallo! Ik ben je HeatShieldings assistent. Hoe kan ik je vandaag helpen bij het vinden van de juiste thermische bescherming voor jouw project?";
   
   if (!apiKey) {
@@ -46,7 +46,7 @@ export async function getGreeting(): Promise<string> {
 }
 
 export async function getChatResponse(message: string, history: Message[]): Promise<Message> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : undefined);
+  const apiKey = process.env.GEMINI_API_KEY;
   
   if (!apiKey) {
     console.error("GEMINI_API_KEY is missing!");

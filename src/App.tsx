@@ -243,7 +243,14 @@ export default function App() {
       console.error("Login Error:", error);
       const currentDomain = window.location.hostname;
       if (error.code === 'auth/unauthorized-domain') {
-        alert(`Fout: Dit domein (${currentDomain}) is niet geautoriseerd in de Firebase Console.\n\nControleer of EXACT "${currentDomain}" is toegevoegd aan:\nFirebase Console > Authentication > Settings > Authorized Domains.\n\nHet kan ook zijn dat de API Sleutel in je Vercel instellingen bij een ander project hoort.`);
+        alert(
+          `Fout: Dit domein (${currentDomain}) is niet geautoriseerd in de Firebase Console.\n\n` +
+          `STAPPEN OM DIT OP TE LOSSEN:\n` +
+          `1. Ga naar de Firebase Console > Authentication > Settings > Authorized Domains.\n` +
+          `2. Klik op 'Add domain'.\n` +
+          `3. Voeg exact toe: ${currentDomain}\n` +
+          `4. Controleer ook of je de 'Support email' hebt ingesteld op de Sign-in method tab.`
+        );
       } else if (error.code === 'auth/popup-blocked') {
         alert("Fout: De login popup werd geblokkeerd. Sta popups toe voor deze site.");
       } else {
