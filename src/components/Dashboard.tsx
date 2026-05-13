@@ -125,10 +125,10 @@ export default function Dashboard({ onClose }: { onClose: () => void }) {
     console.log("Dashboard: Starting subscription to chats collection...");
     console.log("Current User Email:", auth.currentUser?.email);
     
-    // We try to list without ordering first if ordering fails, but let's keep it for now.
+    // Primary query with ordering
     const q = query(collection(db, 'chats'), orderBy('lastUpdateTime', 'desc'));
     
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    let unsubscribe = onSnapshot(q, (snapshot) => {
       console.log(`Dashboard: Received snapshot with ${snapshot.size} chats`);
       const data = snapshot.docs.map(doc => {
         const docData = doc.data();
@@ -142,12 +142,32 @@ export default function Dashboard({ onClose }: { onClose: () => void }) {
       setError(null);
     }, (err) => {
       console.error("Dashboard Snapshot Error:", err);
-      // Detailed error for debugging
-      const errorMessage = err.code === 'permission-denied' 
-        ? "Toegang geweigerd (Permission Denied). Controleer of je bent ingelogd met de juiste beheerder-email (info@heatshieldings.com)."
-        : err.message;
-      setError(`${err.name}: ${errorMessage}`);
-      setIsLoading(false);
+      
+      // If index is missing, try a simpler query
+      if (err.message.includes('index') || err.code === 'failed-precondition') {
+        console.warn("Retrying with simple query (no ordering)...");
+        const simpleQ = query(collection(db, 'chats'));
+        onSnapshot(simpleQ, (snapshot) => {
+          const data = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as ChatSession[];
+          // Manually sort since Firestore couldn't do it
+          const sorted = data.sort((a, b) => b.lastUpdateTime.toMillis() - a.lastUpdateTime.toMillis());
+          setSessions(sorted);
+          setIsLoading(false);
+          setError("Waarschuwing: Chats worden weergegeven zonder server-side sortering (index ontbreekt).");
+        }, (innerErr) => {
+          setError(`Fout bij laden chats: ${innerErr.message}`);
+          setIsLoading(false);
+        });
+      } else {
+        const errorMessage = err.code === 'permission-denied' 
+          ? "Toegang geweigerd. Controleer of je admin-rechten hebt en de Firestore Rules correct zijn."
+          : err.message;
+        setError(`${err.name}: ${errorMessage}`);
+        setIsLoading(false);
+      }
     });
 
     return () => unsubscribe();
